@@ -101,6 +101,27 @@ app.post("/api/login", async (req, res) => {
   }
 });
 
+// get user by email api
+app.get("/getUser/:email", async (req, res) => {
+  try {
+    const user = await User.findOne({ email: req.params.email });
+
+    if (!user) {
+      return res.json({ status: false, message: "User not found" });
+    }
+
+    return res.json({
+      status: true,
+      name: user.name,
+      email: user.email
+    });
+
+  } catch (err) {
+    res.json({ status: false, message: "Server error" });
+  }
+});
+
+
 app.get("/", (req, res) => {
   res.send("API is running!");
 });
