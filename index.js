@@ -1,34 +1,29 @@
 import express from "express";
 import mongoose from "mongoose";
-import { userModel } from "./model/userSchema.js";
 import bcrypt from "bcryptjs";
+import cors from "cors";
 import "dotenv/config";
+import { userModel } from "./model/userSchema.js";
 
-const PORT = process.env.PORT;
+const app = express();
 
+app.use(cors());
+app.use(express.json());
+
+// ----------- CONNECT DB -----------
 const connectDb = async () => {
   try {
     const MONGODB_URI = process.env.MONGODB_URI;
-    await mongoose
-  .connect(MONGODB_URI)
-  .then(() => {
-    console.log("Mongodb connected successfully!");
-  })
-  .catch((err) => {
-    console.log(err);
-  });
+    await mongoose.connect(MONGODB_URI);
+    console.log("MongoDB connected!");
   } catch (error) {
-    console.log(error);
+    console.log("DB Error:", error);
   }
 };
 
-export default connectDb;
-
 connectDb();
 
-const app = express();
-app.use(express.json());
-
+// ----------- SIGNUP API -----------
 app.post("/api/signup", async (req, res) => {
   try {
     const { name, email, password } = req.body;
@@ -40,70 +35,64 @@ app.post("/api/signup", async (req, res) => {
       });
     }
 
-    const encryptPassword = await bcrypt.hash(password, 10);
+    const encrypted = await bcrypt.hash(password, 10);
 
-    const userObj = {
+    const userData = await userModel.create({
       name,
       email,
-      password: encryptPassword,
-    };
+      password: encrypted,
+    });
 
-    // Create data on mongodb
-    const userData = await userModel.create(userObj);
-
-    res.send({
-      message: "user signup sucessfully",
+    return res.send({
+      message: "User signup successfully",
       status: true,
-      userData: userData,
+      userData,
     });
   } catch (error) {
-    res.send({
-      message: "Internal Server Error",
+    return res.status(500).send({
+      message: "Server Error",
       status: false,
+      error,
     });
   }
 });
 
+// ----------- LOGIN API -----------
 app.post("/api/login", async (req, res) => {
   try {
     const { email, password } = req.body;
 
     if (!email || !password) {
-      res.status(400).json({
+      return res.status(400).json({
         message: "Required fields are missing",
         status: false,
       });
-      return;
     }
 
-    const getData = await userModel.findOne({ email });
+    const user = await userModel.findOne({ email });
 
-    console.log(getData);
-
-    if (!getData) {
-      res.json({
-        message: "invalid credentials",
-      });
-      return;
-    }
-
-    const comparePassword = await bcrypt.compare(password, getData.password);
-
-    console.log(comparePassword);
-
-    if (!comparePassword) {
-      res.json({
+    if (!user) {
+      return res.json({
         message: "Invalid credentials",
+        status: false,
       });
-      return;
     }
 
-    res.json({
+    const match = await bcrypt.compare(password, user.password);
+
+    if (!match) {
+      return res.json({
+        message: "Invalid credentials",
+        status: false,
+      });
+    }
+
+    return res.json({
       message: "Login successfully",
-      status: true
+      status: true,
     });
   } catch (error) {
-    res.status(500).json({
+    return res.status(500).json({
       message: "Internal server error",
       error,
     });
@@ -111,12 +100,8 @@ app.post("/api/login", async (req, res) => {
 });
 
 app.get("/", (req, res) => {
-  res.send({
-    message: "Server is running now!",
-    status: true,
-  });
+  res.send("API is running!");
 });
 
-app.listen(PORT, () => {
-  console.log("Server is running!");
-});
+// IMPORTANT FOR VERCEL
+export default app;
