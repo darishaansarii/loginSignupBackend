@@ -6,21 +6,18 @@ import "dotenv/config";
 import { userModel } from "./model/userSchema.js";
 
 const app = express();
-
 app.use(cors());
 app.use(express.json());
 
 // ----------- CONNECT DB -----------
 const connectDb = async () => {
   try {
-    const MONGODB_URI = process.env.MONGODB_URI;
-    await mongoose.connect(MONGODB_URI);
-    console.log("MongoDB connected!");
+    await mongoose.connect(process.env.MONGODB_URI);
+    console.log("MongoDB connected successfully!");
   } catch (error) {
-    console.log("DB Error:", error);
+    console.log("DB Connection Error:", error);
   }
 };
-
 connectDb();
 
 // ----------- SIGNUP API -----------
@@ -29,7 +26,7 @@ app.post("/api/signup", async (req, res) => {
     const { name, email, password } = req.body;
 
     if (!name || !email || !password) {
-      return res.status(400).send({
+      return res.status(400).json({
         message: "Required fields are missing!",
         status: false,
       });
@@ -43,16 +40,20 @@ app.post("/api/signup", async (req, res) => {
       password: encrypted,
     });
 
-    return res.send({
+    return res.json({
       message: "User signup successfully",
       status: true,
       userData,
     });
+
   } catch (error) {
-    return res.status(500).send({
+    if (error.code === 11000) { // duplicate email
+      return res.status(400).json({ message: "Email already exists", status: false });
+    }
+    return res.status(500).json({
       message: "Server Error",
       status: false,
-      error,
+      error: error.message,
     });
   }
 });
@@ -72,7 +73,7 @@ app.post("/api/login", async (req, res) => {
     const user = await userModel.findOne({ email });
 
     if (!user) {
-      return res.json({
+      return res.status(401).json({
         message: "Invalid credentials",
         status: false,
       });
@@ -81,7 +82,7 @@ app.post("/api/login", async (req, res) => {
     const match = await bcrypt.compare(password, user.password);
 
     if (!match) {
-      return res.json({
+      return res.status(401).json({
         message: "Invalid credentials",
         status: false,
       });
@@ -91,10 +92,11 @@ app.post("/api/login", async (req, res) => {
       message: "Login successfully",
       status: true,
     });
+
   } catch (error) {
     return res.status(500).json({
       message: "Internal server error",
-      error,
+      error: error.message,
     });
   }
 });
@@ -103,5 +105,5 @@ app.get("/", (req, res) => {
   res.send("API is running!");
 });
 
-// IMPORTANT FOR VERCEL
+// Export for Vercel
 export default app;
