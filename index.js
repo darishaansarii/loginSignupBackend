@@ -100,39 +100,19 @@ app.post("/api/login", async (req, res) => {
   }
 });
 
-// Scehdule Appointments API
+// ----------- SCHEDULE APPOINTMENTS API -----------
 app.post("/api/appointments", async (req, res) => {
   try {
-    const { userEmail, doctorName, appointmentDate, appointmentTime } =
-      req.body;
+    const { userEmail, doctorName, appointmentDate, appointmentTime } = req.body;
 
     if (!userEmail || !doctorName || !appointmentDate || !appointmentTime) {
-      return res
-        .status(400)
-        .json({ status: false, message: "All fields are required" });
+      return res.status(400).json({ status: false, message: "All fields are required" });
     }
 
-    // Convert date string to Date object
-    const dateObj = new Date(appointmentDate);
-
-    // Check if the selected slot is already booked
-    const existingAppointment = await AppointmentModel.findOne({
-      doctorName,
-      appointmentDate: dateObj,
-      appointmentTime,
-    });
-
-    if (existingAppointment) {
-      return res
-        .status(409)
-        .json({ status: false, message: "Slot unavailable" });
-    }
-
-    // If slot is free, create the appointment
     const newAppointment = await AppointmentModel.create({
       userEmail,
       doctorName,
-      appointmentDate: dateObj,
+      appointmentDate: new Date(appointmentDate),
       appointmentTime,
       status: "Confirmed",
     });
@@ -147,6 +127,7 @@ app.post("/api/appointments", async (req, res) => {
     return res.status(500).json({ status: false, message: "Server error" });
   }
 });
+
 
 // ----------- UPCOMING APPOINTMENTS -----------
 app.get("/api/appointments/upcoming/:userEmail", async (req, res) => {
@@ -211,3 +192,4 @@ if (process.env.NODE_ENV !== "production") {
 
 // IMPORTANT FOR VERCEL
 export default app;
+
