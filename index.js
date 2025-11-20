@@ -5,6 +5,7 @@ import cors from "cors";
 import "dotenv/config";
 import { userModel } from "./model/userSchema.js";
 import { AppointmentModel } from "./model/appointmentSchema.js";
+import { RecordModel } from "./model/recordSchema.js";
 
 const app = express();
 
@@ -177,6 +178,20 @@ app.get("/api/appointments/history/:userEmail", async (req, res) => {
   }
 });
 
+// GET /records/:userEmail
+app.get("/records/:userEmail", async (req, res) => {
+  try {
+    const { userEmail } = req.params;
+    if (!userEmail) return res.status(400).json({ status: false, message: "User email required" });
+
+    const records = await RecordModel.find({ userEmail }).sort({ uploadedAt: -1 });
+    return res.json({ status: true, records });
+  } catch (error) {
+    console.error("Records fetch error:", error);
+    return res.status(500).json({ status: false, message: "Server error" });
+  }
+});
+
 
 app.get("/", (req, res) => {
   res.send({
@@ -192,7 +207,5 @@ if (process.env.NODE_ENV !== "production") {
   });
 }
 
-// IMPORTANT FOR VERCEL
 export default app;
-
 
