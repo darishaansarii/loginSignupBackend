@@ -106,7 +106,9 @@ app.post("/api/appointments", async (req, res) => {
     const { userEmail, doctorName, appointmentDate, appointmentTime } = req.body;
 
     if (!userEmail || !doctorName || !appointmentDate || !appointmentTime) {
-      return res.status(400).json({ status: false, message: "All fields are required" });
+      return res
+        .status(400)
+        .json({ status: false, message: "All fields are required" });
     }
 
     const newAppointment = await AppointmentModel.create({
@@ -192,4 +194,5 @@ if (process.env.NODE_ENV !== "production") {
 
 // IMPORTANT FOR VERCEL
 export default app;
+
 
