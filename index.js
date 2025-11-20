@@ -2,91 +2,260 @@ import express from "express";
 import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
 import cors from "cors";
-import jwt from "jsonwebtoken";
 import "dotenv/config";
 import { userModel } from "./model/userSchema.js";
+import { AppointmentModel } from "./model/appointmentSchema.js";
+import { RecordModel } from "./model/recordSchema.js";
 
 const app = express();
+
 app.use(cors());
 app.use(express.json());
 
-// ---------- CONNECT DB ----------
+// ----------- CONNECT DB -----------
 const connectDb = async () => {
   try {
-    await mongoose.connect(process.env.MONGODB_URI);
+    const MONGODB_URI = process.env.MONGODB_URI;
+    await mongoose.connect(MONGODB_URI);
     console.log("MongoDB connected!");
   } catch (error) {
     console.log("DB Error:", error);
   }
 };
+
 connectDb();
 
-// ---------- JWT MIDDLEWARE ----------
-const authenticate = (req, res, next) => {
-  const token = req.headers.authorization?.split(" ")[1]; // Bearer token
-  if (!token) return res.status(401).json({ status: false, message: "No token provided" });
-
-  try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = decoded;
-    next();
-  } catch (err) {
-    return res.status(401).json({ status: false, message: "Invalid token" });
-  }
-};
-
-// ---------- SIGNUP ----------
+// ----------- SIGNUP API -----------
 app.post("/api/signup", async (req, res) => {
   try {
     const { name, email, password } = req.body;
-    if (!name || !email || !password)
-      return res.status(400).json({ status: false, message: "All fields required" });
 
-    const exists = await userModel.findOne({ email });
-    if (exists) return res.json({ status: false, message: "User already exists" });
+    if (!name || !email || !password) {
+      return res.status(400).send({
+        message: "Required fields are missing!",
+        status: false,
+      });
+    }
 
-    const hashed = await bcrypt.hash(password, 10);
-    const user = await userModel.create({ name, email, password: hashed });
+    const encrypted = await bcrypt.hash(password, 10);
 
-    res.json({ status: true, message: "Signup successful", user });
-  } catch (err) {
-    console.log(err);
-    res.status(500).json({ status: false, message: "Server error" });
+    const userData = await userModel.create({
+      name,
+      email,
+      password: encrypted,
+    });
+
+    return res.send({
+      message: "User signup successfully",
+      status: true,
+      userData,
+    });
+  } catch (error) {
+    return res.status(500).send({
+      message: "Server Error",
+      status: false,
+      error,
+    });
   }
 });
 
-// ---------- LOGIN ----------
+// ----------- LOGIN API -----------
 app.post("/api/login", async (req, res) => {
   try {
     const { email, password } = req.body;
-    if (!email || !password) return res.status(400).json({ status: false, message: "All fields required" });
+
+    if (!email || !password) {
+      return res.status(400).json({
+        message: "Required fields are missing",
+        status: false,
+      });
+    }
 
     const user = await userModel.findOne({ email });
-    if (!user) return res.json({ status: false, message: "Invalid credentials" });
+
+    if (!user) {
+      return res.json({
+        message: "Invalid credentials",
+        status: false,
+      });
+    }
 
     const match = await bcrypt.compare(password, user.password);
-    if (!match) return res.json({ status: false, message: "Invalid credentials" });
 
-    const token = jwt.sign({ id: user._id, email: user.email }, process.env.JWT_SECRET, { expiresIn: "1d" });
-    res.json({ status: true, message: "Login successful", token, user: { name: user.name, email: user.email } });
-  } catch (err) {
-    console.log(err);
-    res.status(500).json({ status: false, message: "Server error" });
+    if (!match) {
+      return res.json({
+        message: "Invalid credentials",
+        status: false,
+      });
+    }
+
+    return res.json({
+      message: "Login successfully",
+      status: true,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      message: "Internal server error",
+      error,
+    });
   }
 });
 
-// ---------- PROTECTED PROFILE ----------
-app.get("/api/profile", authenticate, async (req, res) => {
+// ----------- SCHEDULE APPOINTMENTS API -----------
+app.post("/api/appointments", async (req, res) => {
   try {
-    const user = await userModel.findById(req.user.id).select("-password");
-    if (!user) return res.json({ status: false, message: "User not found" });
-    res.json({ status: true, user });
+    const { userEmail, doctorName, appointmentDate, appointmentTime } = req.body;
+
+    if (!userEmail || !doctorName || !appointmentDate || !appointmentTime) {
+      return res
+        .status(400)
+        .json({ status: false, message: "All fields are required" });
+    }
+
+    const newAppointment = await AppointmentModel.create({
+      userEmail,
+      doctorName,
+      appointmentDate: new Date(appointmentDate),
+      appointmentTime,
+      status: "Confirmed",
+    });
+
+    return res.json({
+      status: true,
+      message: "Appointment booked successfully",
+      appointment: newAppointment,
+    });
   } catch (err) {
-    console.log(err);
-    res.status(500).json({ status: false, message: "Server error" });
+    console.error("Appointment Error:", err);
+    return res.status(500).json({ status: false, message: "Server error" });
   }
 });
 
-// ---------- SERVER ----------
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+
+// ----------- UPCOMING APPOINTMENTS -----------
+app.get("/api/appointments/upcoming/:userEmail", async (req, res) => {
+  try {
+    const { userEmail } = req.params;
+    if (!userEmail) {
+      return res.status(400).json({ status: false, message: "User email is required" });
+    }
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // Reset time to start of today
+
+    const upcomingAppointments = await AppointmentModel.find({
+      userEmail,
+      appointmentDate: { $gte: today },
+    }).sort({ appointmentDate: 1, appointmentTime: 1 }); // Ascending by date, then time
+
+    return res.json({ status: true, appointments: upcomingAppointments });
+  } catch (error) {
+    console.error("Upcoming Appointments Error:", error);
+    return res.status(500).json({ status: false, message: "Server error" });
+  }
+});
+
+// ----------- APPOINTMENT HISTORY -----------
+app.get("/api/appointments/history/:userEmail", async (req, res) => {
+  try {
+    const { userEmail } = req.params;
+    if (!userEmail) {
+      return res.status(400).json({ status: false, message: "User email is required" });
+    }
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // Reset time to start of today
+
+    const pastAppointments = await AppointmentModel.find({
+      userEmail,
+      appointmentDate: { $lt: today },
+    }).sort({ appointmentDate: -1, appointmentTime: -1 }); // Descending by date, latest first
+
+    return res.json({ status: true, appointments: pastAppointments });
+  } catch (error) {
+    console.error("Appointment History Error:", error);
+    return res.status(500).json({ status: false, message: "Server error" });
+  }
+});
+
+// GET /records/:userEmail
+app.get("/records/:userEmail", async (req, res) => {
+  try {
+    const { userEmail } = req.params;
+    if (!userEmail) return res.status(400).json({ status: false, message: "User email required" });
+
+    const records = await RecordModel.find({ userEmail }).sort({ uploadedAt: -1 });
+    return res.json({ status: true, records });
+  } catch (error) {
+    console.error("Records fetch error:", error);
+    return res.status(500).json({ status: false, message: "Server error" });
+  }
+});
+
+// ----------- GET PROFILE DATA -----------
+app.get("/api/profile/:email", async (req, res) => {
+  try {
+    const { email } = req.params;
+
+    const user = await userModel.findOne({ email }).select("-password"); 
+    if (!user) {
+      return res.json({ status: false, message: "User not found" });
+    }
+
+    return res.json({ status: true, user });
+  } catch (error) {
+    console.log("Profile Fetch Error:", error);
+    return res.status(500).json({ status: false, message: "Server error" });
+  }
+});
+
+// ----------- UPDATE PROFILE DATA -----------
+app.put("/api/profile/update", async (req, res) => {
+  try {
+    const { email, name, phone } = req.body;
+
+    if (!email) {
+      return res.json({ status: false, message: "Email is required" });
+    }
+
+    const updatedUser = await userModel.findOneAndUpdate(
+      { email },
+      { name, phone },
+      { new: true }
+    ).select("-password");
+
+    return res.json({
+      status: true,
+      message: "Profile updated successfully",
+      user: updatedUser,
+    });
+  } catch (error) {
+    console.log("Profile Update Error:", error);
+    return res.status(500).json({ status: false, message: "Server error" });
+  }
+});
+
+// ----------- LOGOUT API -----------
+app.post("/api/logout", async (req, res) => {
+  return res.json({
+    status: true,
+    message: "Logout successful",
+  });
+});
+
+
+app.get("/", (req, res) => {
+  res.send({
+    message: "Server is running...",
+    status: true,
+  });
+});
+
+if (process.env.NODE_ENV !== "production") {
+  const PORT = process.env.PORT || 5000;
+  app.listen(PORT, () => {
+    console.log(`Server is running locally on http://localhost:${PORT}`);
+  });
+}
+
+export default app;
