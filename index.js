@@ -235,6 +235,15 @@ app.put("/api/profile/update", async (req, res) => {
   }
 });
 
+// ----------- LOGOUT API -----------
+app.post("/api/logout", async (req, res) => {
+  return res.json({
+    status: true,
+    message: "Logout successful",
+  });
+});
+
+
 app.get("/", (req, res) => {
   res.send({
     message: "Server is running...",
@@ -250,5 +259,6 @@ if (process.env.NODE_ENV !== "production") {
 }
 
 export default app;
+
 
 
