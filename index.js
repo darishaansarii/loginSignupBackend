@@ -192,6 +192,48 @@ app.get("/records/:userEmail", async (req, res) => {
   }
 });
 
+// ----------- GET PROFILE DATA -----------
+app.get("/api/profile/:email", async (req, res) => {
+  try {
+    const { email } = req.params;
+
+    const user = await userModel.findOne({ email }).select("-password"); 
+    if (!user) {
+      return res.json({ status: false, message: "User not found" });
+    }
+
+    return res.json({ status: true, user });
+  } catch (error) {
+    console.log("Profile Fetch Error:", error);
+    return res.status(500).json({ status: false, message: "Server error" });
+  }
+});
+
+// ----------- UPDATE PROFILE DATA -----------
+app.put("/api/profile/update", async (req, res) => {
+  try {
+    const { email, name, phone } = req.body;
+
+    if (!email) {
+      return res.json({ status: false, message: "Email is required" });
+    }
+
+    const updatedUser = await userModel.findOneAndUpdate(
+      { email },
+      { name, phone },
+      { new: true }
+    ).select("-password");
+
+    return res.json({
+      status: true,
+      message: "Profile updated successfully",
+      user: updatedUser,
+    });
+  } catch (error) {
+    console.log("Profile Update Error:", error);
+    return res.status(500).json({ status: false, message: "Server error" });
+  }
+});
 
 app.get("/", (req, res) => {
   res.send({
@@ -208,4 +250,5 @@ if (process.env.NODE_ENV !== "production") {
 }
 
 export default app;
+
 
