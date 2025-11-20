@@ -1,8 +1,11 @@
+// api/index.js (or api/server.js in Vercel)
 import express from "express";
 import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
 import cors from "cors";
 import "dotenv/config";
+import serverless from "serverless-http";
+
 import { userModel } from "./model/userSchema.js";
 import { AppointmentModel } from "./model/appointmentSchema.js";
 import { RecordModel } from "./model/recordSchema.js";
@@ -13,10 +16,13 @@ app.use(cors());
 app.use(express.json());
 
 // ----------- CONNECT DB -----------
+let isConnected = false; // prevent multiple connections in serverless
 const connectDb = async () => {
+  if (isConnected) return;
   try {
     const MONGODB_URI = process.env.MONGODB_URI;
     await mongoose.connect(MONGODB_URI);
+    isConnected = true;
     console.log("MongoDB connected!");
   } catch (error) {
     console.log("DB Error:", error);
@@ -220,11 +226,4 @@ app.get("/", (req, res) => {
   res.send({ message: "Server is running...", status: true });
 });
 
-if (process.env.NODE_ENV !== "production") {
-  const PORT = process.env.PORT || 5000;
-  app.listen(PORT, () => {
-    console.log(`Server is running locally on http://localhost:${PORT}`);
-  });
-}
-
-export default app;
+export const handler = serverless(app);
